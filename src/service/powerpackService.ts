@@ -1,19 +1,18 @@
-import { IResponse } from '@/common/types';
-import { getUserInfo, refresh } from '@/common/server';
+import { IBackendService } from './../services/backend/common/backend';
 import { IStorageService } from '@web-clipper/shared/lib/storage';
 import { ILocalStorageService } from '@/service/common/storage';
 import {
   IPowerpackService,
   PowerpackUserInfo as _PowerpackUserInfo,
 } from '@/service/common/powerpack';
-import { Service, Inject } from 'typedi';
+import { Inject } from 'typedi';
 import { observable, runInAction, computed } from 'mobx';
 import dayjs from 'dayjs';
 import { loading } from '@/common/loading';
 
 type PowerpackUserInfo = _PowerpackUserInfo;
 
-class PowerpackService implements IPowerpackService {
+export class PowerpackService implements IPowerpackService {
   static LOCAL_ACCESS_TOKEN_LOCALE_KEY: string = 'local.access.token.locale';
 
   @observable
@@ -36,7 +35,10 @@ class PowerpackService implements IPowerpackService {
     );
   }
 
-  constructor(@Inject(ILocalStorageService) private localStorageService: IStorageService) {
+  constructor(
+    @Inject(ILocalStorageService) private localStorageService: IStorageService,
+    @Inject(IBackendService) private backendService: IBackendService
+  ) {
     this.localStorageService.onDidChangeStorage(key => {
       if (key === PowerpackService.LOCAL_ACCESS_TOKEN_LOCALE_KEY) {
         this.startup();
@@ -59,19 +61,16 @@ class PowerpackService implements IPowerpackService {
     runInAction(() => {
       this.accessToken = accessToken;
     });
-    const response: IResponse<PowerpackUserInfo> = await getUserInfo();
+    const response: PowerpackUserInfo = await this.backendService.getUserInfo();
     runInAction(() => {
-      this.userInfo = response.result;
+      this.userInfo = response;
     });
   };
 
   @loading
   refresh = async () => {
-    const response = await refresh();
-    await this.localStorageService.set(
-      PowerpackService.LOCAL_ACCESS_TOKEN_LOCALE_KEY,
-      response.result
-    );
+    const response = await this.backendService.refreshToken();
+    await this.localStorageService.set(PowerpackService.LOCAL_ACCESS_TOKEN_LOCALE_KEY, response);
   };
 
   logout = async () => {
@@ -82,5 +81,3 @@ class PowerpackService implements IPowerpackService {
     this.localStorageService.set(PowerpackService.LOCAL_ACCESS_TOKEN_LOCALE_KEY, token);
   };
 }
-
-Service(IPowerpackService)(PowerpackService);
